@@ -48,8 +48,8 @@ unsigned int pot = 0;
 #define SERVO_PIN     (5)
 #define SERVO_IDLE    (90)
 #define SERVO_DELTA   (30)
-#define SERVO_ON      (SERVO_IDLE - 30)
-#define SERVO_OFF     (SERVO_IDLE + 30)
+#define SERVO_ON      (SERVO_IDLE - 25)
+#define SERVO_OFF     (SERVO_IDLE + 40)
 
 Servo servo;
 unsigned int servo_angle = 0;
@@ -57,7 +57,7 @@ bool servo_state = false;
 
 // Timer
 #define OFF_TIME      (65536)
-// #define OFF_TIME      (300)
+// #define OFF_TIME      (5000)
 
 Timer t;
 char servoOff_id = 0;
@@ -70,12 +70,12 @@ void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
   servo.attach(SERVO_PIN);
   servo.write(SERVO_IDLE);
+  delay(1000);
 
   #if defined(SRF02)
     Sonar.begin();
   #endif
 
-  delay(5000);
 
   t.every(50, print);
   t.every(10, readADC);
@@ -136,7 +136,10 @@ void servoOn()
 {
   if (sonar_dis < sonar_thres)
   {
-    servo.write(SERVO_ON);
+    if (servo_state == false)
+    {
+      servo.write(SERVO_ON);
+    }
     servo_state = true;
   }
 }
@@ -145,7 +148,10 @@ void servoOff()
 {
   if (sonar_dis >= sonar_thres)
   {
-    servo.write(SERVO_OFF);
+    if (servo_state == true)
+    {
+      servo.write(SERVO_OFF);
+    }
     servo_state = false;
   }
 }
