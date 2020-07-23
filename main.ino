@@ -2,6 +2,7 @@
 #include <Wire.h>
 #include <Timer.h>
 // #include <avr/wdt.h>
+// add test
 
 #define HCSR04                                 // SRF02 or HCSR04
 
