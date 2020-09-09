@@ -2,7 +2,6 @@
 #include <Wire.h>
 #include <Timer.h>
 // #include <avr/wdt.h>
-// add test
 
 #define HCSR04                                 // SRF02 or HCSR04
 
@@ -15,7 +14,7 @@
 #endif
 
 
-// SRF02 Parameters
+// Sonar Parameters
 #if defined(SRF02)
   #define SONAR_ADDRESS   (0xE0 >> 1)
   #define SONAR_RANGE_MIN (22)
@@ -39,6 +38,10 @@
 int sonar_thres = 0;
 int sonar_dis = 0;
 
+// Switch
+#define SW_PIN        (3)
+#define BLINK_TIME    (100)
+
 // ADC
 #define POT_PIN       (A3)
 #define ADC_FILTER    (0.7)
@@ -46,11 +49,12 @@ int sonar_dis = 0;
 unsigned int pot = 0;
 
 // Servo
-#define SERVO_PIN     (5)
-#define SERVO_IDLE    (90)
-#define SERVO_DELTA   (30)
-#define SERVO_ON      (SERVO_IDLE - 25)
-#define SERVO_OFF     (SERVO_IDLE + 40)
+#define SERVO_PIN       (5)
+#define SERVO_IDLE      (90)
+#define SERVO_DELTA     (30)
+#define SERVO_ON        (SERVO_IDLE - 25)
+#define SERVO_OFF       (SERVO_IDLE + 40)
+#define SERVO_POWER_PIN (4)
 
 Servo servo;
 unsigned int servo_angle = 0;
@@ -60,7 +64,12 @@ bool servo_state = false;
 #define OFF_TIME        (600000)          // 10 mins
 
 Timer t;
+char print_id = 0;
+char readADC_id = 0;
+char readSonar_id = 0;
+char servoOn_id = 0;
 char servoOff_id = 0;
+char blink_id = 0;
 
 // Other
 unsigned int cnt = 0;
@@ -68,39 +77,73 @@ unsigned int cnt = 0;
 void setup() {
   Serial.begin(115200);
   pinMode(LED_BUILTIN, OUTPUT);
+  pinMode(SERVO_POWER_PIN, OUTPUT);
+  pinMode(SW_PIN, INPUT_PULLUP);
   servo.attach(SERVO_PIN);
   servo.write(SERVO_IDLE);
-  delay(1000);
+  delay(5000);
 
   #if defined(SRF02)
     Sonar.begin();
   #endif
 
 
-  t.every(50, print);
-  t.every(10, readADC);
-  t.every(50, readSonar);
-  t.every(300, servoOn);
+  print_id = t.every(50, print);
+  readADC_id =  t.every(10, readADC);
+  readSonar_id =  t.every(50, readSonar);
+  servoOn_id = t.every(300, servoOn);
   servoOff_id = t.every(OFF_TIME, servoOff);
+
+  blink_id = t.every(BLINK_TIME, blink);
+  t.stop(blink_id);
+
   // wdt_enable(WDTO_8S);
 }
 
 void loop() {
+  bool sw_state = digitalRead(SW_PIN);
   t.update();    
 
-  if (sonar_dis < sonar_thres)
+  if (sw_state) 
   {
-    digitalWrite(LED_BUILTIN, HIGH);
-    t.stop(servoOff_id);                            // re-calculate
-    servoOff_id = t.every(OFF_TIME, servoOff);
+    t.stop(blink_id);
+
+    if (sonar_dis < sonar_thres)
+    {
+      digitalWrite(LED_BUILTIN, HIGH);
+      t.stop(servoOff_id);                            // re-calculate
+      servoOff_id = t.every(OFF_TIME, servoOff);
+    }
+    else
+    {
+      digitalWrite(LED_BUILTIN, LOW);
+    }
+    
+    // if (cnt < 10000)
+    //   wdt_reset();
   }
-  else
+  else 
   {
-    digitalWrite(LED_BUILTIN, LOW);
-  }
+      blink_id = t.every(BLINK_TIME, blink);
+
+      // stop all timers
+      t.stop(print_id);
+      t.stop(readADC_id);
+      t.stop(readSonar_id);
+      t.stop(servoOn_id);
+      t.stop(servoOff_id);
+
+      // re-calculate
+      print_id = t.every(50, print);
+      readADC_id =  t.every(10, readADC);
+      readSonar_id =  t.every(50, readSonar);
+      servoOn_id = t.every(300, servoOn);
+      servoOff_id = t.every(OFF_TIME, servoOff);
   
-  // if (cnt < 10000)
-  //   wdt_reset();
+      // turn off
+      servo.write(SERVO_OFF);
+      servo_state = false;
+  }
 }
 
 unsigned int filter(unsigned int oldValue, unsigned int newValue, float n)
@@ -138,6 +181,7 @@ void servoOn()
   {
     if (servo_state == false)
     {
+      digitalWrite(SERVO_POWER_PIN, HIGH);
       servo.write(SERVO_ON);
     }
     servo_state = true;
@@ -150,10 +194,16 @@ void servoOff()
   {
     if (servo_state == true)
     {
+      digitalWrite(SERVO_POWER_PIN, LOW);
       servo.write(SERVO_OFF);
     }
     servo_state = false;
   }
+}
+
+void blink()
+{
+  digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
 }
 
 void print()
